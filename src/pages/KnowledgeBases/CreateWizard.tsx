@@ -1,25 +1,79 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import type { SVGProps } from 'react';
+import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Sparkles, 
-  Upload, 
   Plus, 
   Bot,
   ChevronDown
 } from 'lucide-react';
+import { kbApi } from '../../api/kb';
+import type { KBField, KBFieldType } from '../../api/types';
+import { useKnowledgeBases } from '../../state/useKnowledgeBases';
 
 export default function CreateWizard() {
+  const navigate = useNavigate()
+  const { upsert } = useKnowledgeBases()
   const [step, setStep] = useState(1);
-  const [tags, setTags] = useState<{name: string, type: string, required: boolean}[]>([]);
+  const [tags, setTags] = useState<{name: string, type: KBFieldType, required: boolean}[]>([]);
   const [newTagName, setNewTagName] = useState('');
+  const [newTagType, setNewTagType] = useState<KBFieldType>('text')
+  const [newTagRequired, setNewTagRequired] = useState(false)
+
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const addTag = () => {
     if (newTagName.trim()) {
-      setTags([...tags, { name: newTagName, type: 'Text', required: false }]);
+      setTags([...tags, { name: newTagName.trim(), type: newTagType, required: newTagRequired }]);
       setNewTagName('');
+      setNewTagRequired(false)
+      setNewTagType('text')
     }
   };
+
+  const fields: KBField[] = useMemo(() => {
+    const toKey = (s: string) =>
+      s
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+    return tags.map((t) => ({
+      key: toKey(t.name),
+      label: t.name,
+      type: t.type,
+      required: t.required,
+      description: '',
+    }))
+  }, [tags])
+
+  const onSubmit = async () => {
+    setSubmitError(null)
+    if (!name.trim()) {
+      setSubmitError('Name is required.')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const kb = await kbApi.createKnowledgeBase({
+        name: name.trim(),
+        description: description.trim(),
+        fields,
+      })
+      upsert(kb)
+      navigate(`/knowledge-bases/${kb.id}`)
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : 'Failed to create knowledge base')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -42,7 +96,7 @@ export default function CreateWizard() {
       {/* Stepper */}
       <div className="flex items-center justify-between mt-4 mb-4 max-w-2xl mx-auto w-full relative">
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-[2px] bg-slate-100 -z-10"></div>
-        {[1, 2, 3].map((s) => (
+        {[1, 2].map((s) => (
           <div key={s} className="flex items-center gap-3 bg-gray-50 px-2 lg:px-4">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
               step >= s ? 'bg-violet-600 text-white shadow-md shadow-violet-600/20' : 'bg-white text-slate-400 border border-slate-200'
@@ -50,7 +104,7 @@ export default function CreateWizard() {
               {s}
             </div>
             <span className={`text-sm font-medium hidden sm:block ${step >= s ? 'text-slate-900' : 'text-slate-400'}`}>
-              {s === 1 ? 'Basic Info' : s === 2 ? 'Tags & Keys' : 'Documents'}
+              {s === 1 ? 'Basic Info' : 'Tags & Keys'}
             </span>
           </div>
         ))}
@@ -73,6 +127,8 @@ export default function CreateWizard() {
               <input 
                 type="text" 
                 placeholder="e.g., CV Collection, Product Manuals, Legal Contracts" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm"
               />
             </div>
@@ -81,6 +137,8 @@ export default function CreateWizard() {
               <textarea 
                 placeholder="Describe what this knowledge base will contain and its purpose..." 
                 rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm resize-none"
               ></textarea>
             </div>
@@ -90,14 +148,15 @@ export default function CreateWizard() {
                 Embedding Model
               </label>
               <div className="relative">
-                <select className="appearance-none w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm font-medium text-slate-700 cursor-pointer">
-                  <option>text-embedding-ada-002 — Fast & efficient</option>
-                  <option>text-embedding-3-small — Default</option>
-                  <option>text-embedding-3-large — High accuracy</option>
+                <select
+                  disabled
+                  className="appearance-none w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus:outline-none transition-all text-sm font-medium text-slate-700 cursor-not-allowed opacity-80"
+                >
+                  <option>Backend-managed</option>
                 </select>
                 <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
-              <p className="text-xs text-slate-500 mt-2">Determines semantic search quality. Larger models are more accurate but slower.</p>
+              <p className="text-xs text-slate-500 mt-2">Embedding/model settings are managed by the backend for now.</p>
             </div>
           </div>
         </div>
@@ -129,14 +188,24 @@ export default function CreateWizard() {
                 placeholder="Tag name (e.g., Author, Date, Skills)" 
                 className="flex-1 px-4 py-2 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm"
               />
-              <select className="px-3 py-2 border border-slate-200 rounded-lg shadow-sm bg-white text-sm text-slate-700 focus:outline-none">
-                <option>Text</option>
-                <option>Number</option>
-                <option>Date</option>
-                <option>List</option>
+              <select
+                value={newTagType}
+                onChange={(e) => setNewTagType(e.target.value as KBFieldType)}
+                className="px-3 py-2 border border-slate-200 rounded-lg shadow-sm bg-white text-sm text-slate-700 focus:outline-none"
+              >
+                <option value="text">Text</option>
+                <option value="string">String</option>
+                <option value="number">Number</option>
+                <option value="date">Date</option>
+                <option value="boolean">Boolean</option>
               </select>
               <label className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-2 border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50">
-                <input type="checkbox" className="rounded text-violet-600 focus:ring-violet-500 w-4 h-4" />
+                <input
+                  type="checkbox"
+                  checked={newTagRequired}
+                  onChange={(e) => setNewTagRequired(e.target.checked)}
+                  className="rounded text-violet-600 focus:ring-violet-500 w-4 h-4"
+                />
                 Required
               </label>
               <button 
@@ -174,27 +243,6 @@ export default function CreateWizard() {
             )}
           </div>
         </div>
-
-        {/* Step 3 */}
-        <div className={`glass-card p-8 transition-opacity duration-300 ${step < 3 ? 'opacity-50 pointer-events-none' : ''}`}>
-          <div className="flex items-center gap-4 mb-6">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 3 ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-400'}`}>3</div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Upload Documents</h2>
-              <p className="text-xs text-slate-500">Optional — you can add documents later</p>
-            </div>
-          </div>
-
-          <div className="border hover:border-violet-400 transition-colors border-dashed border-slate-300 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-slate-50/50 cursor-pointer group">
-            <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Upload className="w-6 h-6 text-violet-500" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-700 mb-1">
-              <span className="text-violet-600 hover:underline">Click to upload</span> or drag & drop
-            </h3>
-            <p className="text-xs text-slate-500">PDF, DOC, DOCX, PPT, PPTX — up to 10MB each</p>
-          </div>
-        </div>
       </div>
 
       {/* Action Footer */}
@@ -205,21 +253,25 @@ export default function CreateWizard() {
         >
           {step === 1 ? 'Cancel' : 'Back'}
         </button>
-        <button 
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm transition-all shadow-md ${
-             step === 3 
-              ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-600/20' 
-              : 'bg-slate-900 hover:bg-slate-800 text-white'
-          }`}
-          onClick={() => step < 3 ? setStep(step + 1) : null}
-        >
-          {step === 3 ? (
-            <>
-              <Sparkles className="w-4 h-4" />
-              <span>Create Knowledge Base</span>
-            </>
-          ) : 'Next Step'}
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          {submitError && <div className="text-xs font-semibold text-red-600">{submitError}</div>}
+          <button 
+            disabled={submitting}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-sm transition-all shadow-md ${
+              step === 2 
+                ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-violet-600/20' 
+                : 'bg-slate-900 hover:bg-slate-800 text-white'
+            } ${submitting ? 'opacity-60 cursor-not-allowed' : ''}`}
+            onClick={() => step < 2 ? setStep(step + 1) : onSubmit()}
+          >
+            {step === 2 ? (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>{submitting ? 'Creating…' : 'Create Knowledge Base'}</span>
+              </>
+            ) : 'Next Step'}
+          </button>
+        </div>
       </div>
 
     </div>
@@ -227,6 +279,6 @@ export default function CreateWizard() {
 }
 
 // Inline fallback for missing tag
-function Tags(props: any) {
+function Tags(props: SVGProps<SVGSVGElement>) {
   return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19"/><path d="M9.586 5.586A2 2 0 0 0 8.172 5H3v5.172a2 2 0 0 0 .586 1.414l8.204 8.204a2 2 0 0 0 2.828 0l4.204-4.204a2 2 0 0 0 0-2.828Z"/><circle cx="6.5" cy="9.5" r=".5" fill="currentColor"/></svg>
 }

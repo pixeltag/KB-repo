@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, 
@@ -8,56 +8,69 @@ import {
   Tags,
   MoreHorizontal,
   Calendar,
-  Cpu
+  Cpu,
+  BookOpen
 } from 'lucide-react';
+import { kbApi } from '../../api/kb';
+import type { KnowledgeBase } from '../../api/types';
 
-const stats = [
-  { label: 'Knowledge Bases', value: 3, icon: Layers, color: 'text-violet-500', bg: 'bg-violet-100' },
-  { label: 'Total Documents', value: 35, icon: FileText, color: 'text-purple-500', bg: 'bg-purple-100' },
-  { label: 'Extraction Tags', value: 15, icon: Tags, color: 'text-emerald-500', bg: 'bg-emerald-100' }
-];
+function formatShortDate(iso: string) {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
-const knowledgeBases = [
-  {
-    id: '1',
-    name: 'CV Collection',
-    description: 'Collection of candidate CVs for recruitment',
-    documents: 15,
-    tags: 6,
-    processing: 1,
-    createdAt: 'Jan 15, 2026',
-    model: 'text-embedding-ada-002',
-    pillColor: 'bg-blue-500 text-white',
-    badges: ['Full Name', 'Email', 'Years of Experience']
-  },
-  {
-    id: '2',
-    name: 'Product Documentation',
-    description: 'Technical documentation for our product line',
-    documents: 8,
-    tags: 4,
-    processing: 0,
-    createdAt: 'Jan 20, 2026',
-    model: 'text-embedding-ada-002',
-    pillColor: 'bg-fuchsia-500 text-white',
-    badges: ['Product Name', 'Version', 'Category']
-  },
-  {
-    id: '3',
-    name: 'Legal Contracts',
-    description: 'Repository of legal documents and contracts',
-    documents: 12,
-    tags: 5,
-    processing: 0,
-    createdAt: 'Feb 1, 2026',
-    model: 'text-embedding-ada-002',
-    pillColor: 'bg-emerald-500 text-white',
-    badges: ['Contract Type', 'Party Name', 'Effective Date']
-  }
-];
+const pillColors = [
+  'bg-blue-500 text-white',
+  'bg-fuchsia-500 text-white',
+  'bg-emerald-500 text-white',
+  'bg-amber-500 text-white',
+  'bg-violet-500 text-white',
+]
 
 export default function KnowledgeBases() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [items, setItems] = useState<KnowledgeBase[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    // initial `loading` is true; avoid synchronous setState here (lint rule)
+    kbApi
+      .listKnowledgeBases()
+      .then((data) => {
+        if (cancelled) return
+        setItems(data)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : 'Failed to load knowledge bases')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return items
+    return items.filter((kb) => (kb.name + ' ' + kb.description + ' ' + kb.slug).toLowerCase().includes(q))
+  }, [items, searchTerm])
+
+  const stats = useMemo(() => {
+    const totalFields = items.reduce((acc, kb) => acc + (kb.fields?.length ?? 0), 0)
+    return [
+      { label: 'Knowledge Bases', value: items.length, icon: Layers, color: 'text-violet-500', bg: 'bg-violet-100' },
+      { label: 'Total Fields', value: totalFields, icon: Tags, color: 'text-emerald-500', bg: 'bg-emerald-100' },
+      { label: 'Index Status', value: loading ? 'Syncing' : 'Ready', icon: FileText, color: 'text-purple-500', bg: 'bg-purple-100' },
+    ] as const
+  }, [items, loading])
 
   return (
     <div className="w-full flex flex-col gap-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -108,13 +121,29 @@ export default function KnowledgeBases() {
 
       {/* Knowledge Bases Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {knowledgeBases.map(kb => (
+        {error && (
+          <div className="lg:col-span-3 glass-card p-6 border border-red-100 bg-red-50/40 text-red-800">
+            <div className="font-semibold mb-1">Couldn’t load knowledge bases</div>
+            <div className="text-sm opacity-90">{error}</div>
+          </div>
+        )}
+
+        {!error && loading && (
+          <div className="lg:col-span-3 glass-card p-6 text-slate-600">
+            Loading knowledge bases…
+          </div>
+        )}
+
+        {!error && !loading && filtered.map((kb, idx) => {
+          const pillColor = pillColors[idx % pillColors.length]
+          const badges = (kb.fields ?? []).slice(0, 3).map((f) => f.label)
+          return (
           <Link key={kb.id} to={`/knowledge-bases/${kb.id}`} className="group relative">
-            <div className={`absolute -inset-0.5 rounded-2xl blur opacity-0 group-hover:opacity-40 transition duration-500 ${kb.pillColor} bg-opacity-30`}></div>
+            <div className={`absolute -inset-0.5 rounded-2xl blur opacity-0 group-hover:opacity-40 transition duration-500 ${pillColor} bg-opacity-30`}></div>
             <div className="glass-card relative h-full p-6 flex flex-col justify-between overflow-hidden">
               <div>
                 <div className="flex justify-between items-start mb-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${kb.pillColor}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${pillColor}`}>
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <button className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors">
@@ -127,19 +156,19 @@ export default function KnowledgeBases() {
                 
                 <div className="flex gap-4 mb-6">
                   <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 flex-1">
-                    <div className="text-lg font-bold text-slate-800">{kb.documents}</div>
-                    <div className="text-xs text-slate-500 font-medium">Documents</div>
+                    <div className="text-lg font-bold text-slate-800">{kb.slug}</div>
+                    <div className="text-xs text-slate-500 font-medium">Slug</div>
                   </div>
                   <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 flex-1">
-                    <div className="text-lg font-bold text-slate-800">{kb.tags}</div>
-                    <div className="text-xs text-slate-500 font-medium">Tags</div>
+                    <div className="text-lg font-bold text-slate-800">{kb.fields?.length ?? 0}</div>
+                    <div className="text-xs text-slate-500 font-medium">Fields</div>
                   </div>
                 </div>
 
-                {kb.processing > 0 && (
+                {kb.fields?.some((f) => f.required) && (
                   <div className="bg-amber-50 text-amber-700 text-xs font-medium px-3 py-2 rounded-md mb-6 border border-amber-100 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
-                    {kb.processing} document processing...
+                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                    Has required fields
                   </div>
                 )}
               </div>
@@ -147,27 +176,29 @@ export default function KnowledgeBases() {
               <div className="mt-auto border-t border-slate-100 pt-5 flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>Created {kb.createdAt}</span>
+                  <span>Created {formatShortDate(kb.created_at)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <Cpu className="w-3.5 h-3.5" />
-                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">{kb.model}</span>
+                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">/api/v1</span>
                 </div>
                 
                 <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-50">
-                  {kb.badges.map((badge, i) => (
+                  {badges.map((badge, i) => (
                     <span key={i} className="text-[10px] font-medium px-2 py-1 bg-violet-50 text-violet-700 rounded-md border border-violet-100">
                       {badge}
                     </span>
                   ))}
-                  <span className="text-[10px] font-medium px-2 py-1 bg-slate-50 text-slate-500 rounded-md border border-slate-100">
-                    +2
-                  </span>
+                  {(kb.fields?.length ?? 0) > badges.length && (
+                    <span className="text-[10px] font-medium px-2 py-1 bg-slate-50 text-slate-500 rounded-md border border-slate-100">
+                      +{(kb.fields?.length ?? 0) - badges.length}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
           </Link>
-        ))}
+        )})}
 
         {/* Add New Card */}
         <Link to="/knowledge-bases/create" className="glass-card flex flex-col items-center justify-center p-8 text-center border-dashed border-2 hover:border-violet-300 group min-h-[350px]">
@@ -181,9 +212,4 @@ export default function KnowledgeBases() {
       </div>
     </div>
   );
-}
-
-// Temporary inline BookOpen import to fix missing import Error
-function BookOpen(props: any) {
-  return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
 }

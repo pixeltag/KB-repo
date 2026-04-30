@@ -7,14 +7,29 @@ import {
   HelpCircle,
   Database
 } from 'lucide-react';
+import { useMemo } from 'react';
+import { useKnowledgeBases } from '../../state/useKnowledgeBases';
 
-const workspaces = [
-  { id: '1', name: 'CV Collection', items: 15, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: '2', name: 'Product Documentat...', items: 8, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  { id: '3', name: 'Legal Contracts', items: 12, color: 'text-emerald-500', bg: 'bg-emerald-500/10' }
-];
+const colors = [
+  { color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  { color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  { color: 'text-violet-500', bg: 'bg-violet-500/10' },
+]
 
 export default function Sidebar() {
+  const { items: kbs } = useKnowledgeBases()
+
+  const workspaces = useMemo(() => {
+    return kbs.map((kb, idx) => ({
+      id: kb.id,
+      name: kb.name,
+      items: kb.fields?.length ?? 0,
+      ...colors[idx % colors.length],
+    }))
+  }, [kbs])
+
   return (
     <aside className="w-[280px] bg-[#0E0B16] text-white flex flex-col h-full border-r border-[#1e1a33] shadow-xl">
       {/* Brand Header */}
@@ -64,7 +79,7 @@ export default function Sidebar() {
         <div>
           <div className="flex items-center justify-between px-2 mb-3">
             <div className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Workspaces</div>
-            <span className="w-5 h-5 rounded-full bg-[#1a162b] text-[10px] font-bold flex items-center justify-center text-gray-400">3</span>
+            <span className="w-5 h-5 rounded-full bg-[#1a162b] text-[10px] font-bold flex items-center justify-center text-gray-400">{workspaces.length}</span>
           </div>
           <nav className="flex flex-col gap-1">
             {workspaces.map(ws => (
@@ -85,6 +100,9 @@ export default function Sidebar() {
                 <span className="text-[11px] font-mono opacity-60">{ws.items}</span>
               </NavLink>
             ))}
+            {workspaces.length === 0 && (
+              <div className="px-3 py-2.5 text-xs text-gray-500">No knowledge bases yet.</div>
+            )}
           </nav>
         </div>
 
