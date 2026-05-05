@@ -1,11 +1,13 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import ToastHost from '../ui/ToastHost';
 
 export default function MainLayout() {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden text-gray-900 font-sans selection:bg-violet-600/20">
       {/* Sidebar fixed to the left */}
       <Sidebar />
+      <ToastHost />
       
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">

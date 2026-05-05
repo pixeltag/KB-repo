@@ -1,4 +1,4 @@
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   FolderSync, 
   Plus, 
@@ -20,6 +20,12 @@ const colors = [
 
 export default function Sidebar() {
   const { items: kbs } = useKnowledgeBases()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const forceResetCreateWizard = () => {
+    navigate(`/knowledge-bases/create?reset=${Date.now()}`)
+  }
 
   const workspaces = useMemo(() => {
     return kbs.map((kb, idx) => ({
@@ -64,6 +70,12 @@ export default function Sidebar() {
             </NavLink>
             <NavLink 
               to="/knowledge-bases/create"
+              onClick={(e) => {
+                if (location.pathname === '/knowledge-bases/create') {
+                  e.preventDefault()
+                  forceResetCreateWizard()
+                }
+              }}
               className={({isActive}) => `
                 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
                 ${isActive ? 'bg-indigo-900/40 text-indigo-300 border border-indigo-500/20 shadow-sm' : 'text-gray-400 hover:text-white hover:bg-[#1a162b]'}
@@ -112,6 +124,12 @@ export default function Sidebar() {
       <div className="p-4 px-6 mt-auto">
         <Link 
           to="/knowledge-bases/create"
+          onClick={(e) => {
+            if (location.pathname === '/knowledge-bases/create') {
+              e.preventDefault()
+              forceResetCreateWizard()
+            }
+          }}
           className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white shadow-lg shadow-violet-600/20 py-3 px-4 rounded-xl font-medium transition-all"
         >
           <Plus className="w-4 h-4" />

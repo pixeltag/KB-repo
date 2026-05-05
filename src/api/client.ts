@@ -1,3 +1,5 @@
+import { toast } from '../lib/toast'
+
 export class ApiError extends Error {
   status: number
   body: unknown
@@ -31,11 +33,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     body = JSON.stringify(options.body)
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-    body,
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+      body,
+    })
+  } catch (e: unknown) {
+    // Network / CORS / offline / DNS failures throw at fetch()
+    toast.error('Network error. Please check your connection and try again.', { title: 'Request failed' })
+    throw e
+  }
 
   if (res.status === 204) {
     return undefined as T
@@ -51,6 +60,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         : typeof parsed === 'object' && parsed !== null && 'detail' in parsed
           ? String((parsed as { detail?: unknown }).detail ?? res.statusText)
           : res.statusText
+    toast.error(String(msg), { title: `API error (${res.status})` })
     throw new ApiError(String(msg), res.status, parsed)
   }
 

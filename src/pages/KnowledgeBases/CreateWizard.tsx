@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -15,6 +15,9 @@ import { useKnowledgeBases } from '../../state/useKnowledgeBases';
 export default function CreateWizard() {
   const navigate = useNavigate()
   const { upsert } = useKnowledgeBases()
+  const [searchParams] = useSearchParams()
+  const resetKey = searchParams.get('reset') ?? ''
+
   const [step, setStep] = useState(1);
   const [tags, setTags] = useState<{name: string, type: KBFieldType, required: boolean}[]>([]);
   const [newTagName, setNewTagName] = useState('');
@@ -26,6 +29,24 @@ export default function CreateWizard() {
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const resetForm = () => {
+    setStep(1)
+    setTags([])
+    setNewTagName('')
+    setNewTagType('text')
+    setNewTagRequired(false)
+    setName('')
+    setDescription('')
+    setSubmitting(false)
+    setSubmitError(null)
+  }
+
+  useEffect(() => {
+    if (!resetKey) return
+    resetForm()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey])
 
   const addTag = () => {
     if (newTagName.trim()) {
@@ -69,7 +90,9 @@ export default function CreateWizard() {
       upsert(kb)
       navigate(`/knowledge-bases/${kb.id}`)
     } catch (e: unknown) {
-      setSubmitError(e instanceof Error ? e.message : 'Failed to create knowledge base')
+      // API/network errors are shown via global toaster (apiRequest)
+      // Keep the form enabled and avoid inline "Failed to fetch" banners.
+      setSubmitError(null)
     } finally {
       setSubmitting(false)
     }
@@ -112,137 +135,139 @@ export default function CreateWizard() {
 
       <div className="space-y-8">
         {/* Step 1 */}
-        <div className={`glass-card p-8 transition-opacity duration-300 ${step < 1 ? 'opacity-50 pointer-events-none' : ''}`}>
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-sm">1</div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Basic Information</h2>
-              <p className="text-xs text-slate-500">Name, description, and embedding model</p>
-            </div>
-          </div>
-          
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Name <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                placeholder="e.g., CV Collection, Product Manuals, Legal Contracts" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Description</label>
-              <textarea 
-                placeholder="Describe what this knowledge base will contain and its purpose..." 
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm resize-none"
-              ></textarea>
-            </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
-                <Bot className="w-4 h-4 text-slate-400" />
-                Embedding Model
-              </label>
-              <div className="relative">
-                <select
-                  disabled
-                  className="appearance-none w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus:outline-none transition-all text-sm font-medium text-slate-700 cursor-not-allowed opacity-80"
-                >
-                  <option>Backend-managed</option>
-                </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        {step === 1 && (
+          <div className="glass-card p-8 transition-opacity duration-300">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-sm">1</div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Basic Information</h2>
+                <p className="text-xs text-slate-500">Name, description, and embedding model</p>
               </div>
-              <p className="text-xs text-slate-500 mt-2">Embedding/model settings are managed by the backend for now.</p>
+            </div>
+            
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Name <span className="text-red-500">*</span></label>
+                <input 
+                  type="text" 
+                  placeholder="e.g., CV Collection, Product Manuals, Legal Contracts" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Description</label>
+                <textarea 
+                  placeholder="Describe what this knowledge base will contain and its purpose..." 
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-sm resize-none"
+                ></textarea>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-1.5">
+                  <Bot className="w-4 h-4 text-slate-400" />
+                  Embedding Model
+                </label>
+                <div className="relative">
+                  <select
+                    disabled
+                    className="appearance-none w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm focus:outline-none transition-all text-sm font-medium text-slate-700 cursor-not-allowed opacity-80"
+                  >
+                    <option>Backend-managed</option>
+                  </select>
+                  <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Embedding/model settings are managed by the backend for now.</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Step 2 */}
-        <div className={`glass-card p-8 transition-opacity duration-300 ${step < 2 ? 'opacity-50 pointer-events-none' : ''}`}>
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 2 ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-400'}`}>2</div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Tags & Extraction Keys</h2>
-                <p className="text-xs text-slate-500">Define fields to extract from each document</p>
+        {step === 2 && (
+          <div className="glass-card p-8 transition-opacity duration-300">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-violet-100 text-violet-700">2</div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Tags & Extraction Keys</h2>
+                  <p className="text-xs text-slate-500">Define fields to extract from each document</p>
+                </div>
               </div>
-            </div>
-            {step >= 2 && (
-               <button className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg font-medium text-sm transition-all">
-                 <Sparkles className="w-4 h-4 text-violet-500" />
-                 AI Suggest
-               </button>
-            )}
-          </div>
-          
-          <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-4 mb-4">
-            <div className="flex items-center gap-3">
-              <input 
-                type="text" 
-                value={newTagName}
-                onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="Tag name (e.g., Author, Date, Skills)" 
-                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm"
-              />
-              <select
-                value={newTagType}
-                onChange={(e) => setNewTagType(e.target.value as KBFieldType)}
-                className="px-3 py-2 border border-slate-200 rounded-lg shadow-sm bg-white text-sm text-slate-700 focus:outline-none"
-              >
-                <option value="text">Text</option>
-                <option value="string">String</option>
-                <option value="number">Number</option>
-                <option value="date">Date</option>
-                <option value="boolean">Boolean</option>
-              </select>
-              <label className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-2 border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={newTagRequired}
-                  onChange={(e) => setNewTagRequired(e.target.checked)}
-                  className="rounded text-violet-600 focus:ring-violet-500 w-4 h-4"
-                />
-                Required
-              </label>
-              <button 
-                onClick={addTag}
-                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-2 px-4 rounded-lg font-medium text-sm transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Add
+              <button className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg font-medium text-sm transition-all">
+                <Sparkles className="w-4 h-4 text-violet-500" />
+                AI Suggest
               </button>
             </div>
-          </div>
+            
+            <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <input 
+                  type="text" 
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  placeholder="Tag name (e.g., Author, Date, Skills)" 
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 text-sm"
+                />
+                <select
+                  value={newTagType}
+                  onChange={(e) => setNewTagType(e.target.value as KBFieldType)}
+                  className="px-3 py-2 border border-slate-200 rounded-lg shadow-sm bg-white text-sm text-slate-700 focus:outline-none"
+                >
+                  <option value="text">Text</option>
+                  <option value="string">String</option>
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                  <option value="boolean">Boolean</option>
+                </select>
+                <label className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-2 border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={newTagRequired}
+                    onChange={(e) => setNewTagRequired(e.target.checked)}
+                    className="rounded text-violet-600 focus:ring-violet-500 w-4 h-4"
+                  />
+                  Required
+                </label>
+                <button 
+                  onClick={addTag}
+                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-2 px-4 rounded-lg font-medium text-sm transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </button>
+              </div>
+            </div>
 
-          <div className="border border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-slate-50/30">
-            {tags.length === 0 ? (
-              <>
-                <Tags className="w-8 h-8 text-slate-300 mb-3" />
-                <h3 className="text-sm font-semibold text-slate-600 mb-1">No tags defined yet</h3>
-                <p className="text-xs text-slate-400">Add tags manually or use AI Suggest</p>
-              </>
-            ) : (
-              <div className="w-full space-y-2">
-                {tags.map((tag, i) => (
-                  <div key={i} className="flex flex-row items-center justify-between bg-white border border-slate-200 px-4 py-3 rounded-lg shadow-sm">
-                     <div className="flex items-center gap-3">
+            <div className="border border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-slate-50/30">
+              {tags.length === 0 ? (
+                <>
+                  <Tags className="w-8 h-8 text-slate-300 mb-3" />
+                  <h3 className="text-sm font-semibold text-slate-600 mb-1">No tags defined yet</h3>
+                  <p className="text-xs text-slate-400">Add tags manually or use AI Suggest</p>
+                </>
+              ) : (
+                <div className="w-full space-y-2">
+                  {tags.map((tag, i) => (
+                    <div key={i} className="flex flex-row items-center justify-between bg-white border border-slate-200 px-4 py-3 rounded-lg shadow-sm">
+                      <div className="flex items-center gap-3">
                         <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 text-xs flex items-center justify-center font-mono">{i+1}</span>
                         <span className="font-medium text-slate-800 text-sm">{tag.name}</span>
-                     </div>
-                     <div className="flex items-center gap-2">
+                      </div>
+                      <div className="flex items-center gap-2">
                         <span className="text-[10px] font-medium px-2 py-0.5 bg-slate-100 text-slate-600 rounded uppercase tracking-wider">{tag.type}</span>
                         {tag.required && <span className="text-[10px] font-medium px-2 py-0.5 bg-red-50 text-red-600 rounded">Required</span>}
-                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Action Footer */}

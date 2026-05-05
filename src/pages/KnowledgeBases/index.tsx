@@ -33,7 +33,6 @@ export default function KnowledgeBases() {
   const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -44,9 +43,8 @@ export default function KnowledgeBases() {
         if (cancelled) return
         setItems(data)
       })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Failed to load knowledge bases')
+      .catch(() => {
+        // Errors are surfaced via global toaster (apiRequest)
       })
       .finally(() => {
         if (cancelled) return
@@ -121,20 +119,13 @@ export default function KnowledgeBases() {
 
       {/* Knowledge Bases Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {error && (
-          <div className="lg:col-span-3 glass-card p-6 border border-red-100 bg-red-50/40 text-red-800">
-            <div className="font-semibold mb-1">Couldn’t load knowledge bases</div>
-            <div className="text-sm opacity-90">{error}</div>
-          </div>
-        )}
-
-        {!error && loading && (
+        {loading && (
           <div className="lg:col-span-3 glass-card p-6 text-slate-600">
             Loading knowledge bases…
           </div>
         )}
 
-        {!error && !loading && filtered.map((kb, idx) => {
+        {!loading && filtered.map((kb, idx) => {
           const pillColor = pillColors[idx % pillColors.length]
           const badges = (kb.fields ?? []).slice(0, 3).map((f) => f.label)
           return (
